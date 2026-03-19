@@ -129,6 +129,17 @@ enable_video_understanding = false
 3. Config file
 4. Built-in defaults
 
+## Claude Code Plugin
+
+This repository is also a Claude Code plugin that provides the `xai` skill.
+
+```bash
+claude plugin marketplace add tani-shi/xai-cli
+claude plugin install xai-cli@xai-cli
+```
+
+The skill enables Claude Code to use `xai` commands for searching X posts, browsing user timelines, retrieving threads, discovering trending topics, and performing web searches.
+
 ## Development
 
 ```bash

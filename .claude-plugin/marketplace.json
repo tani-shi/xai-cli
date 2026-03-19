@@ -1,0 +1,21 @@
+{
+  "name": "xai-cli",
+  "owner": {
+    "name": "tani-shi"
+  },
+  "metadata": {
+    "description": "CLI tool for searching and browsing X (Twitter) content via xAI API",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "xai-cli",
+      "description": "xai CLI skill for Claude Code",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/xai"
+      ]
+    }
+  ]
+}
