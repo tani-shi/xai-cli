@@ -31,8 +31,9 @@ MOCK_RESPONSE = {
 
 
 @pytest.fixture(autouse=True)
-def _set_api_key(monkeypatch):
-    monkeypatch.setenv("XAI_API_KEY", TEST_API_KEY)
+def _set_api_key(monkeypatch, request):
+    if request.node.get_closest_marker("live") is None:
+        monkeypatch.setenv("XAI_API_KEY", TEST_API_KEY)
 
 
 @pytest.fixture(autouse=True)
