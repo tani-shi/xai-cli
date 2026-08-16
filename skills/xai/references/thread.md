@@ -1,26 +1,10 @@
-# Thread
-
-## Retrieve a thread
+# スレッドに関する生成回答
 
 ```bash
-xai thread <URL> [--summary] [--format FORMAT] [--no-stream]
+xai thread https://x.com/HANDLE/status/ID [--summary] \
+  [--format text|markdown|json] [--raw] [--no-stream]
 ```
 
-Retrieves and displays a full thread from a post URL.
+X Searchのスレッド取得機能を使い、指定投稿の会話について引用付きの解説を生成します。`--summary`は要点中心の回答を依頼します。
 
-- `--summary` — show summary instead of full thread
-- `--format FORMAT` — output format (`text`, `json`)
-- `--no-stream` — disable streaming output
-
-## Examples
-
-```bash
-# Retrieve a thread by URL
-xai thread https://x.com/user/status/1234567890
-
-# Retrieve and summarize a thread
-xai thread https://x.com/user/status/1234567890 --summary
-
-# Get thread as JSON
-xai thread https://x.com/user/status/1234567890 --format json
-```
+URLは`https`のXまたはTwitter status URLである必要があります。

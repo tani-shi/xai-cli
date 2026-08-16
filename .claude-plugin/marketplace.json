@@ -4,13 +4,13 @@
     "name": "tani-shi"
   },
   "metadata": {
-    "description": "CLI tool for searching and browsing X (Twitter) content via xAI API",
-    "version": "0.1.0"
+    "description": "Generate cited answers from X and the web with xAI search tools",
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "xai-cli",
-      "description": "xai CLI skill for Claude Code",
+      "description": "Generate cited X and web research answers with xai-cli",
       "source": "./",
       "strict": false,
       "skills": [

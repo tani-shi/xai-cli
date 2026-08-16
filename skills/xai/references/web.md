@@ -1,28 +1,18 @@
-# Web
-
-## Web search
+# Web Searchによる生成回答
 
 ```bash
 xai web "<query>" [--domain DOMAIN]... [--exclude-domain DOMAIN]... \
-  [--format FORMAT] [--no-stream]
+  [--format text|markdown|json] [--raw] [--no-stream]
 ```
 
-Performs a web search via the xAI API.
+GrokがWeb検索とページ閲覧を行い、引用付きの回答を生成します。検索結果の生リストは返しません。
 
-- `--domain DOMAIN` — restrict results to specific domains (repeat for multiple)
-- `--exclude-domain DOMAIN` — exclude results from specific domains (repeat for multiple)
-- `--format FORMAT` — output format (`text`, `json`)
-- `--no-stream` — disable streaming output
-
-## Examples
+- `--domain`と`--exclude-domain`は同時指定不可、それぞれ最大5件
+- ドメインはscheme、port、pathを含まないホスト名
+- `--raw`は`--format json`との組み合わせだけで使用
 
 ```bash
-# Basic web search
-xai web "xAI Grok latest updates"
-
-# Search within specific domains
-xai web "AI safety research" --domain arxiv.org --domain openai.com
-
-# Search excluding certain domains
-xai web "machine learning tutorial" --exclude-domain medium.com --format json
+xai web "Python release changes"
+xai web "API reference" --domain docs.python.org --domain peps.python.org
+xai web "tutorial" --exclude-domain medium.com --format json
 ```

@@ -1,19 +1,36 @@
 [project]
 name = "xai-cli"
-version = "0.1.0"
-description = "CLI tool for searching and browsing X (Twitter) content via xAI API"
+dynamic = ["version"]
+description = "Generate cited answers from X and the web with xAI search tools"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Shintaro Tanikawa", email = "shintaro.tanikawa@mooth.co.jp" }
 ]
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
 dependencies = [
     "typer>=0.15",
     "httpx>=0.28",
     "rich>=13",
     "pydantic>=2",
     "platformdirs>=4",
+    "tomli-w>=1.2",
 ]
+
+[project.urls]
+Repository = "https://github.com/tani-shi/xai-cli"
+Issues = "https://github.com/tani-shi/xai-cli/issues"
 
 [project.scripts]
 xai = "xai_cli.main:app"
@@ -24,6 +41,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "mypy>=1.15",
     "pytest>=8",
     "pytest-httpx>=0.35",
     "ruff>=0.9",
@@ -32,5 +50,18 @@ dev = [
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["xai_cli"]
+
+[tool.hatch.version]
+path = ".claude-plugin/marketplace.json"
+pattern = '"version":\s*"(?P<version>[^\"]+)"'
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["live: calls the real xAI API"]

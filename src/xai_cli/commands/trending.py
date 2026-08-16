@@ -1,52 +1,48 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
-from xai_cli.client.responses import extract_text_from_response, x_search
-from xai_cli.config import get_model, load_config
-from xai_cli.errors import handle_error
-from xai_cli.output import print_json, print_text
+from xai_cli.client.models import ResponseRequest
+from xai_cli.client.responses import build_x_search_request
+from xai_cli.commands.common import execute_answer
+from xai_cli.config import Config
+from xai_cli.domain import OutputFormat, TrendingCategory
+from xai_cli.errors import InvalidRequestError
 
 
 def trending(
-    topic: Annotated[Optional[str], typer.Argument(help="Optional topic for details")] = None,
+    topic: Annotated[str | None, typer.Argument(help="Optional topic for details")] = None,
     category: Annotated[
-        Optional[str],
-        typer.Option("--category", help="Category: tech, politics, sports, entertainment"),
+        TrendingCategory | None,
+        typer.Option("--category", help="Topic category"),
     ] = None,
-    format: Annotated[str, typer.Option("--format", help="Output format: text, json")] = "",
+    format: Annotated[OutputFormat | None, typer.Option("--format")] = None,
+    raw: Annotated[bool, typer.Option("--raw", help="Emit raw API JSON")] = False,
     no_stream: Annotated[bool, typer.Option("--no-stream", help="Disable streaming")] = False,
 ) -> None:
-    """Get trending topics on X."""
-    try:
-        config = load_config()
-        model = get_model()
-        fmt = format or config.defaults.format
-        stream = config.defaults.stream and not no_stream
+    """Generate a cited answer about current trends on X."""
 
+    def request(model: str, stream: bool, _config: Config) -> ResponseRequest:
+        if topic and category:
+            raise InvalidRequestError("TOPIC and --category cannot be combined.")
         if topic:
-            prompt = f'Show trending posts and discussions about "{topic}" on X right now'
+            prompt = f'Analyze current X trends and discussion about "{topic}", with citations.'
         elif category:
-            prompt = f"What are the current trending topics on X in the {category} category?"
+            prompt = f"Analyze current {category.value} trends on X, with citations."
         else:
-            prompt = "What are the current trending topics on X?"
-
-        if fmt != "json" and stream:
-            typer.echo("Fetching trending topics...\n", err=True)
-
-        result = x_search(
+            prompt = "Analyze the most important current trends on X, with citations."
+        return build_x_search_request(
             prompt,
             model,
-            stream=stream and fmt != "json",
+            stream=stream,
         )
 
-        if isinstance(result, dict):
-            if fmt == "json":
-                print_json(result)
-            else:
-                text = extract_text_from_response(result)
-                print_text(text)
-    except Exception as e:
-        handle_error(e)
+    execute_answer(
+        request,
+        format_override=format,
+        no_stream=no_stream,
+        raw=raw,
+        progress="Searching X to analyze current trends...",
+    )

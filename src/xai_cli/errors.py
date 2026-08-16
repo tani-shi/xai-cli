@@ -1,27 +1,58 @@
-import typer
+from __future__ import annotations
+
+from enum import IntEnum
+
+
+class ExitCode(IntEnum):
+    GENERAL = 1
+    AUTH = 2
+    API = 3
+    USAGE = 4
+    RATE_LIMIT = 5
+    NETWORK = 6
+    CONFIG = 7
+    INCOMPLETE = 8
 
 
 class XaiError(Exception):
-    exit_code: int = 1
+    exit_code = ExitCode.GENERAL
+    label = "Error"
 
 
 class AuthError(XaiError):
-    exit_code = 2
+    exit_code = ExitCode.AUTH
+    label = "Authentication error"
 
 
 class ApiError(XaiError):
-    exit_code = 3
+    exit_code = ExitCode.API
+    label = "API error"
 
 
-def handle_error(e: Exception) -> None:
-    if isinstance(e, AuthError):
-        typer.echo(f"Authentication error: {e}", err=True)
-        raise SystemExit(2)
-    if isinstance(e, ApiError):
-        typer.echo(f"API error: {e}", err=True)
-        raise SystemExit(3)
-    if isinstance(e, XaiError):
-        typer.echo(f"Error: {e}", err=True)
-        raise SystemExit(1)
-    typer.echo(f"Unexpected error: {e}", err=True)
-    raise SystemExit(1)
+class InvalidRequestError(XaiError):
+    exit_code = ExitCode.USAGE
+    label = "Invalid request"
+
+
+class RateLimitError(XaiError):
+    exit_code = ExitCode.RATE_LIMIT
+    label = "Rate limit error"
+
+
+class NetworkError(XaiError):
+    exit_code = ExitCode.NETWORK
+    label = "Network error"
+
+
+class ConfigError(XaiError):
+    exit_code = ExitCode.CONFIG
+    label = "Configuration error"
+
+
+class IncompleteResponseError(XaiError):
+    exit_code = ExitCode.INCOMPLETE
+    label = "Incomplete response"
+
+
+class StreamError(ApiError):
+    label = "Stream error"

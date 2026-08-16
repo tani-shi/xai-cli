@@ -1,0 +1,101 @@
+import httpx
+import pytest
+
+from tests.conftest import MOCK_RESPONSE, TEST_API_KEY
+from xai_cli.client.responses import build_x_search_request
+from xai_cli.client.transport import BASE_URL, ApiClient
+from xai_cli.errors import (
+    ApiError,
+    AuthError,
+    IncompleteResponseError,
+    InvalidRequestError,
+    NetworkError,
+    RateLimitError,
+)
+
+
+def request():
+    return build_x_search_request("query", "grok-4.6", stream=False)
+
+
+def test_response_request_and_authorization_are_exact(httpx_mock):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", json=MOCK_RESPONSE)
+
+    with ApiClient(TEST_API_KEY) as client:
+        response = client.create_response(request())
+
+    sent = httpx_mock.get_request()
+    assert sent is not None
+    assert sent.headers["Authorization"] == f"Bearer {TEST_API_KEY}"
+    assert sent.read().decode() == (
+        '{"model":"grok-4.6","input":[{"role":"user","content":"query"}],'
+        '"tools":[{"type":"x_search"}],"stream":false}'
+    )
+    assert response.text.startswith("A cited answer")
+    assert response.citation_urls == ["https://example.com/source"]
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_authentication_errors(httpx_mock, status):
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=status,
+        json={"error": {"message": "invalid token"}},
+    )
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(AuthError, match=str(status)):
+        client.create_response(request())
+
+
+def test_api_key_is_redacted_from_server_error(httpx_mock):
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=401,
+        json={"error": {"message": f"rejected {TEST_API_KEY}"}},
+    )
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(AuthError) as caught:
+        client.create_response(request())
+    assert TEST_API_KEY not in str(caught.value)
+
+
+def test_422_is_invalid_request(httpx_mock):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", status_code=422, text="bad field")
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(InvalidRequestError, match="422"):
+        client.create_response(request())
+
+
+def test_429_is_rate_limit(httpx_mock):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", status_code=429)
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(RateLimitError, match="429"):
+        client.create_response(request())
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_server_errors(httpx_mock, status):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", status_code=status)
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(ApiError, match=str(status)):
+        client.create_response(request())
+
+
+def test_timeout_is_network_error(httpx_mock):
+    httpx_mock.add_exception(httpx.ReadTimeout("timed out"), url=f"{BASE_URL}/responses")
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(NetworkError, match="timed out"):
+        client.create_response(request())
+
+
+def test_invalid_json_is_incomplete_response(httpx_mock):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", text="not json")
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(IncompleteResponseError, match="invalid"):
+        client.create_response(request())
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"id": "r", "status": "incomplete", "output": []},
+        {"id": "r", "status": "completed", "output": []},
+    ],
+)
+def test_incomplete_responses(httpx_mock, response):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", json=response)
+    with ApiClient(TEST_API_KEY) as client, pytest.raises(IncompleteResponseError):
+        client.create_response(request())
