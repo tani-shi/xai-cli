@@ -1,27 +1,16 @@
-# Trending
-
-## Discover trending topics
+# Xトレンドの分析
 
 ```bash
-xai trending [topic] [--category CATEGORY] [--format FORMAT] [--no-stream]
+xai trending [TOPIC] [--category tech|politics|sports|entertainment] \
+  [--format text|markdown|json] [--raw] [--no-stream]
 ```
 
-Shows currently trending topics on X.
+Grokが現在のXを検索し、重要なトレンドを引用付きで分析します。Xのトレンド一覧をそのまま返すコマンドではありません。
 
-- `topic` — optional topic for detailed trending posts (positional argument)
-- `--category CATEGORY` — topic category filter (tech, politics, sports, entertainment)
-- `--format FORMAT` — output format (`text`, `json`)
-- `--no-stream` — disable streaming output
-
-## Examples
+`TOPIC`と`--category`は同時に指定できません。
 
 ```bash
-# Get global trending topics
 xai trending
-
-# Get trending posts about a specific topic
-xai trending "AI"
-
-# Get trending in a specific category as JSON
-xai trending --category technology --format json
+xai trending "spaceflight"
+xai trending --category tech --format json
 ```

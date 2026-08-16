@@ -10,8 +10,9 @@ from xai_cli.commands.web import web
 
 app = typer.Typer(
     name="xai",
-    help="CLI tool for searching and browsing X (Twitter) content via xAI API.",
+    help="Generate cited answers from X and the web with xAI search tools.",
     no_args_is_help=True,
+    pretty_exceptions_show_locals=False,
 )
 
 app.command()(search)

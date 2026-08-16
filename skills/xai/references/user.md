@@ -1,31 +1,13 @@
-# User
-
-## Browse user timeline
+# ユーザーの投稿に関する生成回答
 
 ```bash
-xai user @<username> [query] [--from DATE] [--to DATE] [--format FORMAT] [--no-stream]
+xai user @HANDLE [QUESTION] [--from YYYY-MM-DD] [--to YYYY-MM-DD] \
+  [--format text|markdown|json] [--raw] [--no-stream]
 ```
 
-Retrieves posts from the specified user's timeline.
-
-- `query` — optional topic filter (positional argument)
-- `--from DATE` — only posts after this date (YYYY-MM-DD)
-- `--to DATE` — only posts before this date (YYYY-MM-DD)
-- `--format FORMAT` — output format (`text`, `json`)
-- `--no-stream` — disable streaming output
-
-## Examples
+指定ユーザーだけを対象にX Searchを実行し、最近の投稿の要約または質問への引用付き回答を生成します。タイムラインの生データは返しません。
 
 ```bash
-# Get recent posts from a user
-xai user @elonmusk
-
-# Get posts from a user about a specific topic
-xai user @elonmusk "AI announcements"
-
-# Get posts from a date range
-xai user @xaboratories --from 2026-02-28
-
-# Get user timeline as JSON
-xai user @anthropic --format json --from 2026-03-01
+xai user @xai
+xai user @xai "Which API changes were announced?" --from 2026-01-01
 ```

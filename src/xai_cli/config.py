@@ -1,88 +1,138 @@
 from __future__ import annotations
 
 import os
+import tempfile
+import tomllib
 from pathlib import Path
 
 from platformdirs import user_config_dir
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from tomli_w import dumps as dump_toml
+
+from xai_cli.domain import OutputFormat
+from xai_cli.errors import ConfigError
 
 CONFIG_DIR = Path(user_config_dir("xai"))
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
-DEFAULT_MODEL = "grok-4-1-fast-non-reasoning"
+DEFAULT_MODEL = "grok-4.6"
 
 
-class SearchDefaults(BaseModel):
+class ConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+
+class SearchDefaults(ConfigModel):
     enable_image_understanding: bool = False
     enable_video_understanding: bool = False
 
 
-class Defaults(BaseModel):
-    model: str = DEFAULT_MODEL
+class Defaults(ConfigModel):
+    model: str = Field(default=DEFAULT_MODEL, min_length=1)
     stream: bool = True
-    format: str = "text"
+    format: OutputFormat = OutputFormat.TEXT
+
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("model cannot be blank")
+        return value
 
 
-class Auth(BaseModel):
+class Auth(ConfigModel):
     api_key: str = ""
 
 
-class Config(BaseModel):
+class Config(ConfigModel):
     auth: Auth = Field(default_factory=Auth)
     defaults: Defaults = Field(default_factory=Defaults)
     search: SearchDefaults = Field(default_factory=SearchDefaults)
 
 
-def _parse_toml(text: str) -> dict:
-    import tomllib
-
-    return tomllib.loads(text)
-
-
 def load_config() -> Config:
-    if CONFIG_FILE.exists():
-        data = _parse_toml(CONFIG_FILE.read_text())
-        return Config(**data)
-    return Config()
+    if not CONFIG_FILE.exists():
+        return Config()
+    try:
+        _restrict_path_permissions(CONFIG_FILE)
+        text = CONFIG_FILE.read_text(encoding="utf-8")
+        return Config.model_validate(tomllib.loads(text))
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"Configuration file {CONFIG_FILE} is not valid UTF-8.") from exc
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"Invalid TOML in {CONFIG_FILE}: {exc}") from exc
+    except ValidationError as exc:
+        detail = exc.errors(include_url=False)[0]
+        location = ".".join(str(part) for part in detail["loc"])
+        raise ConfigError(
+            f"Invalid setting {location!r} in {CONFIG_FILE}: {detail['msg']}"
+        ) from exc
+    except OSError as exc:
+        raise ConfigError(f"Could not read {CONFIG_FILE}: {exc.strerror or exc}") from exc
 
 
 def save_config(config: Config) -> None:
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
-
-    lines.append("[auth]")
-    lines.append(f'api_key = "{config.auth.api_key}"')
-    lines.append("")
-
-    lines.append("[defaults]")
-    lines.append(f'model = "{config.defaults.model}"')
-    lines.append(f"stream = {'true' if config.defaults.stream else 'false'}")
-    lines.append(f'format = "{config.defaults.format}"')
-    lines.append("")
-
-    lines.append("[search]")
-    ei = "true" if config.search.enable_image_understanding else "false"
-    ev = "true" if config.search.enable_video_understanding else "false"
-    lines.append(f"enable_image_understanding = {ei}")
-    lines.append(f"enable_video_understanding = {ev}")
-    lines.append("")
-
-    CONFIG_FILE.write_text("\n".join(lines))
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        serialized = dump_toml(config.model_dump(mode="json"))
+        descriptor, temporary_name = tempfile.mkstemp(prefix=".config-", dir=CONFIG_DIR)
+        temporary = Path(temporary_name)
+        try:
+            _restrict_path_permissions(temporary)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                output.write(serialized)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, CONFIG_FILE)
+            _restrict_path_permissions(CONFIG_FILE)
+            _sync_directory(CONFIG_DIR)
+        finally:
+            temporary.unlink(missing_ok=True)
+    except OSError as exc:
+        raise ConfigError(f"Could not save {CONFIG_FILE}: {exc.strerror or exc}") from exc
 
 
-def get_api_key() -> str:
+def get_api_key(config: Config | None = None) -> str:
     env_key = os.environ.get("XAI_API_KEY")
     if env_key:
         return env_key
-    config = load_config()
-    if config.auth.api_key:
-        return config.auth.api_key
+    resolved_config = config or load_config()
+    if resolved_config.auth.api_key:
+        return resolved_config.auth.api_key
     return ""
 
 
-def get_model() -> str:
+def get_model(config: Config | None = None) -> str:
     env_model = os.environ.get("XAI_DEFAULT_MODEL")
     if env_model:
         return env_model
-    config = load_config()
-    return config.defaults.model
+    resolved_config = config or load_config()
+    return resolved_config.defaults.model
+
+
+def parse_boolean(value: str) -> bool:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    raise ConfigError(f"Invalid boolean {value!r}; use true or false.")
+
+
+def _is_posix() -> bool:
+    return os.name == "posix"
+
+
+def _restrict_path_permissions(path: Path) -> None:
+    if _is_posix():
+        os.chmod(path, 0o600)
+
+
+def _sync_directory(path: Path) -> None:
+    if not _is_posix():
+        return
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

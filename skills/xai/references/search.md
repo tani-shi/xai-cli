@@ -1,34 +1,20 @@
-# Search
-
-## Search X posts
+# X Searchによる生成回答
 
 ```bash
-xai search "<query>" [--from DATE] [--to DATE] [--from-user USER]... \
-  [--exclude USER]... [--images] [--format FORMAT] [--no-stream]
+xai search "<query>" [--from YYYY-MM-DD] [--to YYYY-MM-DD] \
+  [--from-user HANDLE]... [--exclude HANDLE]... [--images] \
+  [--format text|markdown|json] [--raw] [--no-stream]
 ```
 
-Searches X posts matching the given query.
+GrokがX Searchを実行し、検索した投稿を根拠に引用付き回答を生成します。
 
-- `--from DATE` — only posts after this date (YYYY-MM-DD)
-- `--to DATE` — only posts before this date (YYYY-MM-DD)
-- `--from-user USER` — filter by post authors (repeat for multiple users)
-- `--exclude USER` — exclude posts from these users (repeat for multiple users)
-- `--images` — enable image understanding
-- `--format FORMAT` — output format (`text`, `json`, `markdown`)
-- `--no-stream` — disable streaming output
-
-## Examples
+- 日付は両端を含み、`--from`は`--to`以前
+- `--from-user`と`--exclude`は同時指定不可、それぞれ最大20件
+- ハンドルは`@`付き・なしのどちらも可
+- `--images`は投稿画像の理解を有効化
+- `--raw`は`--format json`との組み合わせだけで使用
 
 ```bash
-# Search for recent posts about a topic
-xai search "Claude AI" --from 2026-03-06
-
-# Search posts from specific users
-xai search "announcement" --from-user elonmusk --from-user xaboratories
-
-# Search with image understanding
-xai search "infographic" --images --format json
-
-# Search within a date range
-xai search "product launch" --from 2026-01-01 --to 2026-02-01
+xai search "xAI API updates" --from 2026-01-01
+xai search "release" --from-user @xai --from-user @elonmusk --format json
 ```
