@@ -57,6 +57,8 @@ def load_config() -> Config:
         _restrict_path_permissions(CONFIG_FILE)
         text = CONFIG_FILE.read_text(encoding="utf-8")
         return Config.model_validate(tomllib.loads(text))
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"Configuration file {CONFIG_FILE} is not valid UTF-8.") from exc
     except tomllib.TOMLDecodeError as exc:
         raise ConfigError(f"Invalid TOML in {CONFIG_FILE}: {exc}") from exc
     except ValidationError as exc:

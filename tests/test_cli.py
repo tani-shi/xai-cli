@@ -247,6 +247,21 @@ def test_config_validates_format():
     assert "text, markdown, or json" in result.stderr
 
 
+def test_invalid_utf8_config_exits_without_exposing_content():
+    from xai_cli.config import CONFIG_FILE
+
+    secret = b"xai-secret-value"
+    CONFIG_FILE.write_bytes(b'[auth]\napi_key = "' + secret + b'\xff"\n')
+
+    result = runner.invoke(app, ["config", "list"])
+
+    assert result.exit_code == 7
+    assert result.stdout == ""
+    assert "Configuration error" in result.stderr
+    assert "not valid UTF-8" in result.stderr
+    assert secret.decode() not in result.output
+
+
 def test_usage_and_authentication_exit_codes_do_not_overlap(monkeypatch):
     invalid_format = runner.invoke(app, ["search", "query", "--format", "yaml"])
     assert invalid_format.exit_code == 2

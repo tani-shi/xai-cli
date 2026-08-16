@@ -86,6 +86,18 @@ def test_invalid_toml_has_specific_error():
         load_config()
 
 
+def test_invalid_utf8_has_specific_error_without_exposing_content():
+    from xai_cli.config import CONFIG_FILE
+
+    secret = b"xai-secret-value"
+    CONFIG_FILE.write_bytes(b'[auth]\napi_key = "' + secret + b'\xff"\n')
+
+    with pytest.raises(ConfigError, match="not valid UTF-8") as caught:
+        load_config()
+
+    assert secret.decode() not in str(caught.value)
+
+
 def test_invalid_config_value_has_specific_error():
     from xai_cli.config import CONFIG_FILE
 

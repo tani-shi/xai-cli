@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -231,9 +232,11 @@ def _retry_delay(response: httpx.Response, method: str, attempt: int) -> float |
 
 def _parse_retry_after(value: str) -> float | None:
     try:
-        return max(0.0, float(value))
+        delay = float(value)
     except ValueError:
         pass
+    else:
+        return delay if math.isfinite(delay) and delay >= 0 else None
     try:
         retry_at = parsedate_to_datetime(value)
     except (TypeError, ValueError, OverflowError):
