@@ -59,7 +59,7 @@ The configuration path is platform-specific and provided by `platformdirs`. Prin
 xai config path
 ```
 
-The file is written atomically with mode `0600`.
+The file is written atomically. On POSIX systems, its mode is enforced as `0600`, including existing files created by 0.1 releases.
 
 ## Commands
 
@@ -138,6 +138,8 @@ xai search "xAI updates" --format json --raw | jq '.output'
 
 Text and Markdown stream by default when streaming is enabled in the configuration. `--no-stream` requests a complete response before writing it. JSON is always non-streaming so it remains valid JSON.
 
+POST requests are retried at most twice only when xAI returns `Retry-After` with HTTP 429 or 503 and the requested delay is no more than two seconds. Ambiguous 500, 502, and 504 responses are not replayed.
+
 ## Configuration commands
 
 ```bash
@@ -166,9 +168,9 @@ Supported keys are `api_key`, `default_model` (alias `model`), `stream`, `format
 | Code | Meaning |
 | ---: | --- |
 | 1 | General error |
-| 2 | Authentication or authorization error |
-| 3 | xAI API or stream error |
-| 4 | Invalid request or option combination |
+| 2 | Invalid syntax, request, or option combination |
+| 3 | Authentication or authorization error |
+| 4 | xAI API or stream error |
 | 5 | Rate limit exceeded |
 | 6 | Network error or timeout |
 | 7 | Configuration error |

@@ -37,3 +37,14 @@ def test_markdown_is_preserved_when_piped(capsys):
     write_markdown("# Heading\n\n[Source](https://example.com)")
     captured = capsys.readouterr()
     assert captured.out == "# Heading\n\n[Source](https://example.com)\n"
+
+
+def test_markdown_is_rendered_for_terminal(monkeypatch, capsys):
+    monkeypatch.setattr("xai_cli.output.is_pipe", lambda: False)
+
+    write_markdown("# Heading")
+
+    captured = capsys.readouterr()
+    assert "Heading" in captured.out
+    assert "# Heading" not in captured.out
+    assert captured.out.startswith(" ")

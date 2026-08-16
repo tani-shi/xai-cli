@@ -49,17 +49,25 @@ def execute_answer(
             if stream:
                 with client.stream_response(request) as events:
                     wrote_delta = False
-                    completed = False
+                    chunks: list[str] = []
+                    completed_response: ResponseEnvelope | None = None
                     for event in events:
                         if isinstance(event, DeltaEvent):
-                            write_stream_delta(event.delta)
+                            if output_format is OutputFormat.MARKDOWN:
+                                chunks.append(event.delta)
+                            else:
+                                write_stream_delta(event.delta)
                             wrote_delta = True
                         elif isinstance(event, CompletedEvent):
-                            completed = True
-                    if wrote_delta:
-                        finish_stream()
-                    if not completed:
+                            completed_response = event.response
+                    if completed_response is None:
                         raise InvalidRequestError("The response stream did not complete.")
+                    if output_format is OutputFormat.MARKDOWN:
+                        write_markdown("".join(chunks) or completed_response.text)
+                    elif wrote_delta:
+                        finish_stream()
+                    else:
+                        write_text(completed_response.text)
                 return
             response = client.create_response(request)
         answer = response_to_answer(response)

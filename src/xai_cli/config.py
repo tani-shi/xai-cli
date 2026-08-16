@@ -54,6 +54,7 @@ def load_config() -> Config:
     if not CONFIG_FILE.exists():
         return Config()
     try:
+        _restrict_path_permissions(CONFIG_FILE)
         text = CONFIG_FILE.read_text(encoding="utf-8")
         return Config.model_validate(tomllib.loads(text))
     except tomllib.TOMLDecodeError as exc:
@@ -75,18 +76,14 @@ def save_config(config: Config) -> None:
         descriptor, temporary_name = tempfile.mkstemp(prefix=".config-", dir=CONFIG_DIR)
         temporary = Path(temporary_name)
         try:
-            os.fchmod(descriptor, 0o600)
+            _restrict_path_permissions(temporary)
             with os.fdopen(descriptor, "w", encoding="utf-8") as output:
                 output.write(serialized)
                 output.flush()
                 os.fsync(output.fileno())
             os.replace(temporary, CONFIG_FILE)
-            os.chmod(CONFIG_FILE, 0o600)
-            directory_descriptor = os.open(CONFIG_DIR, os.O_RDONLY)
-            try:
-                os.fsync(directory_descriptor)
-            finally:
-                os.close(directory_descriptor)
+            _restrict_path_permissions(CONFIG_FILE)
+            _sync_directory(CONFIG_DIR)
         finally:
             temporary.unlink(missing_ok=True)
     except OSError as exc:
@@ -118,3 +115,22 @@ def parse_boolean(value: str) -> bool:
     if normalized in {"false", "0", "no", "off"}:
         return False
     raise ConfigError(f"Invalid boolean {value!r}; use true or false.")
+
+
+def _is_posix() -> bool:
+    return os.name == "posix"
+
+
+def _restrict_path_permissions(path: Path) -> None:
+    if _is_posix():
+        os.chmod(path, 0o600)
+
+
+def _sync_directory(path: Path) -> None:
+    if not _is_posix():
+        return
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)

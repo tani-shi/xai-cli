@@ -7,10 +7,16 @@ on:
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.12", "3.13"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: ubuntu-latest
+            python-version: "3.13"
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

@@ -69,6 +69,72 @@ def test_429_is_rate_limit(httpx_mock):
         client.create_response(request())
 
 
+@pytest.mark.parametrize("status", [429, 503])
+def test_retry_after_recovers_transient_post_errors(httpx_mock, status):
+    waits: list[float] = []
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=status,
+        headers={"Retry-After": "0"},
+    )
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", json=MOCK_RESPONSE)
+
+    with ApiClient(TEST_API_KEY, sleep=waits.append) as client:
+        response = client.create_response(request())
+
+    assert response.id == "resp_123"
+    assert waits == [0.0]
+    assert len(httpx_mock.get_requests()) == 2
+
+
+def test_retry_limit_returns_last_error(httpx_mock):
+    waits: list[float] = []
+    for _ in range(3):
+        httpx_mock.add_response(
+            url=f"{BASE_URL}/responses",
+            status_code=503,
+            headers={"Retry-After": "0"},
+        )
+
+    with (
+        ApiClient(TEST_API_KEY, sleep=waits.append) as client,
+        pytest.raises(ApiError, match="503"),
+    ):
+        client.create_response(request())
+
+    assert waits == [0.0, 0.0]
+    assert len(httpx_mock.get_requests()) == 3
+
+
+def test_post_is_not_retried_without_bounded_retry_after(httpx_mock):
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=429,
+        headers={"Retry-After": "60"},
+    )
+    with (
+        ApiClient(TEST_API_KEY, sleep=lambda _: pytest.fail("unexpected retry")) as client,
+        pytest.raises(RateLimitError),
+    ):
+        client.create_response(request())
+    assert len(httpx_mock.get_requests()) == 1
+
+
+@pytest.mark.parametrize("status", [500, 502, 504])
+def test_ambiguous_post_server_errors_are_not_retried(httpx_mock, status):
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=status,
+        headers={"Retry-After": "0"},
+    )
+    with (
+        ApiClient(TEST_API_KEY, sleep=lambda _: pytest.fail("unexpected retry")) as client,
+        pytest.raises(ApiError, match=str(status)),
+    ):
+        client.create_response(request())
+    assert len(httpx_mock.get_requests()) == 1
+
+
 @pytest.mark.parametrize("status", [500, 502, 503, 504])
 def test_server_errors(httpx_mock, status):
     httpx_mock.add_response(url=f"{BASE_URL}/responses", status_code=status)

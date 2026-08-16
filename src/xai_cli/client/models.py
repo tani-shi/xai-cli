@@ -160,9 +160,23 @@ class IncompleteEvent(BaseModel):
     response: ResponseEnvelope | None = None
 
 
-class ErrorEvent(BaseModel):
+class ErrorEvent(ApiModel):
     type: Literal["error"]
-    error: ErrorDetail
+    message: str | None = None
+    code: str | None = None
+    error: ErrorDetail | None = None
+
+    @model_validator(mode="after")
+    def validate_error(self) -> ErrorEvent:
+        if self.message is None and self.error is None:
+            raise ValueError("error event must include message or error details")
+        return self
+
+    @property
+    def detail(self) -> ErrorDetail:
+        if self.error is not None:
+            return self.error
+        return ErrorDetail(message=self.message or "The response failed.", code=self.code)
 
 
 StreamTerminalEvent = CompletedEvent | FailedEvent | IncompleteEvent | ErrorEvent

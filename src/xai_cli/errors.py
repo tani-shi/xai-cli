@@ -5,9 +5,9 @@ from enum import IntEnum
 
 class ExitCode(IntEnum):
     GENERAL = 1
-    AUTH = 2
-    API = 3
-    USAGE = 4
+    USAGE = 2
+    AUTH = 3
+    API = 4
     RATE_LIMIT = 5
     NETWORK = 6
     CONFIG = 7

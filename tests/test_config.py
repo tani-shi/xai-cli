@@ -31,7 +31,8 @@ def test_save_and_load(tmp_path, monkeypatch):
     assert loaded.auth.api_key == "xai-test-key"
     assert loaded.defaults.model == "custom-model"
     assert loaded.defaults.stream is False
-    assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
+    if os.name == "posix":
+        assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
 
 
 def test_toml_special_characters_round_trip():
@@ -110,3 +111,25 @@ def test_atomic_save_preserves_old_file_on_replace_failure(monkeypatch):
 
     assert CONFIG_FILE.read_text(encoding="utf-8") == "old content"
     assert not list(CONFIG_FILE.parent.glob(".config-*"))
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions are not available")
+def test_load_migrates_existing_config_permissions():
+    from xai_cli.config import CONFIG_FILE
+
+    save_config(Config())
+    os.chmod(CONFIG_FILE, 0o644)
+
+    load_config()
+
+    assert stat.S_IMODE(CONFIG_FILE.stat().st_mode) == 0o600
+
+
+def test_windows_save_path_skips_posix_operations(monkeypatch):
+    monkeypatch.setattr("xai_cli.config._is_posix", lambda: False)
+
+    config = Config()
+    config.defaults.model = "windows-model"
+    save_config(config)
+
+    assert load_config().defaults.model == "windows-model"

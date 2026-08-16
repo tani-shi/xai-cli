@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+import time
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import cast
 
 import httpx
@@ -31,6 +34,10 @@ from xai_cli.errors import (
 
 BASE_URL = "https://api.x.ai/v1"
 DEFAULT_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
+MAX_RETRIES = 2
+MAX_RETRY_DELAY = 2.0
+RETRYABLE_GET_STATUS_CODES = frozenset({429, 502, 503, 504})
+RETRYABLE_POST_STATUS_CODES = frozenset({429, 503})
 
 
 class ApiClient:
@@ -41,6 +48,7 @@ class ApiClient:
         base_url: str = BASE_URL,
         timeout: httpx.Timeout = DEFAULT_TIMEOUT,
         transport: httpx.BaseTransport | None = None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         if not api_key:
             raise AuthError("API key is not configured. Run 'xai config init' or set XAI_API_KEY.")
@@ -54,6 +62,7 @@ class ApiClient:
             transport=transport,
         )
         self._api_key = api_key
+        self._sleep = sleep
 
     def __enter__(self) -> ApiClient:
         return self
@@ -87,13 +96,20 @@ class ApiClient:
     @contextmanager
     def stream_response(self, request: ResponseRequest) -> Iterator[Iterator[StreamEvent]]:
         try:
-            with self._client.stream(
-                "POST",
-                "/responses",
-                json=request.model_dump(mode="json", exclude_none=True),
-            ) as response:
-                _raise_for_status(response, self._api_key)
-                yield self._decode_stream(response)
+            for attempt in range(MAX_RETRIES + 1):
+                with self._client.stream(
+                    "POST",
+                    "/responses",
+                    json=request.model_dump(mode="json", exclude_none=True),
+                ) as response:
+                    retry_delay = _retry_delay(response, "POST", attempt)
+                    if retry_delay is not None:
+                        response.read()
+                        self._sleep(retry_delay)
+                        continue
+                    _raise_for_status(response, self._api_key)
+                    yield self._decode_stream(response)
+                    return
         except (AuthError, ApiError, InvalidRequestError, RateLimitError):
             raise
         except httpx.TimeoutException as exc:
@@ -120,7 +136,7 @@ class ApiClient:
             if isinstance(event, IncompleteEvent):
                 raise IncompleteResponseError("The API reported an incomplete response.")
             if isinstance(event, ErrorEvent):
-                raise StreamError(event.error.message)
+                raise StreamError(event.detail.message)
         if not terminal:
             raise IncompleteResponseError("The stream ended before a completion event.")
 
@@ -131,14 +147,21 @@ class ApiClient:
         *,
         json_body: dict[str, object] | None = None,
     ) -> httpx.Response:
-        try:
-            response = self._client.request(method, path, json=json_body)
-        except httpx.TimeoutException as exc:
-            raise NetworkError("The API request timed out.") from exc
-        except httpx.RequestError as exc:
-            raise NetworkError("The API request could not be completed.") from exc
-        _raise_for_status(response, self._api_key)
-        return response
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                response = self._client.request(method, path, json=json_body)
+            except httpx.TimeoutException as exc:
+                raise NetworkError("The API request timed out.") from exc
+            except httpx.RequestError as exc:
+                raise NetworkError("The API request could not be completed.") from exc
+            retry_delay = _retry_delay(response, method, attempt)
+            if retry_delay is not None:
+                response.close()
+                self._sleep(retry_delay)
+                continue
+            _raise_for_status(response, self._api_key)
+            return response
+        raise RuntimeError("Retry loop ended without returning a response.")
 
 
 def _require_complete(response: ResponseEnvelope) -> None:
@@ -182,6 +205,42 @@ def _api_error_message(response: httpx.Response) -> str:
             return cast(str, payload["message"])[:500]
     text = response.text.strip()
     return text[:500] if text else "No error details were returned."
+
+
+def _retry_delay(response: httpx.Response, method: str, attempt: int) -> float | None:
+    normalized_method = method.upper()
+    retryable_statuses = (
+        RETRYABLE_GET_STATUS_CODES if normalized_method == "GET" else RETRYABLE_POST_STATUS_CODES
+    )
+    if (
+        normalized_method not in {"GET", "POST"}
+        or response.status_code not in retryable_statuses
+        or attempt >= MAX_RETRIES
+    ):
+        return None
+    retry_after = response.headers.get("Retry-After")
+    if normalized_method == "POST" and retry_after is None:
+        return None
+    if retry_after is None:
+        return min(0.25 * 2.0**attempt, MAX_RETRY_DELAY)
+    delay = _parse_retry_after(retry_after)
+    if delay is None or delay > MAX_RETRY_DELAY:
+        return None
+    return delay
+
+
+def _parse_retry_after(value: str) -> float | None:
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        retry_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=UTC)
+    return max(0.0, (retry_at - datetime.now(UTC)).total_seconds())
 
 
 def _iter_sse_data(lines: Iterator[str]) -> Iterator[str]:

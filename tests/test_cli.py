@@ -159,7 +159,7 @@ def test_raw_json_is_explicit(httpx_mock):
 
 def test_raw_requires_json():
     result = runner.invoke(app, ["search", "query", "--raw"])
-    assert result.exit_code == 4
+    assert result.exit_code == 2
     assert result.stdout == ""
     assert "--raw requires" in result.stderr
 
@@ -177,6 +177,25 @@ def test_streaming_writes_deltas_and_keeps_diagnostics_on_stderr(httpx_mock):
     assert result.exit_code == 0
     assert result.stdout == "A cited answer.\n"
     assert result.stderr == 'Searching X to answer "query"...\n'
+
+
+def test_streaming_markdown_is_rendered_after_completion(httpx_mock, monkeypatch):
+    body = "".join(
+        [
+            sse_event({"type": "response.output_text.delta", "delta": "# "}),
+            sse_event({"type": "response.output_text.delta", "delta": "Heading"}),
+            sse_event({"type": "response.completed", "response": MOCK_RESPONSE}),
+        ]
+    )
+    rendered: list[str] = []
+    monkeypatch.setattr("xai_cli.commands.common.write_markdown", rendered.append)
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", text=body)
+
+    result = runner.invoke(app, ["search", "query", "--format", "markdown"])
+
+    assert result.exit_code == 0
+    assert rendered == ["# Heading"]
+    assert result.stdout == ""
 
 
 def test_models_json_contract(httpx_mock):
@@ -226,3 +245,13 @@ def test_config_validates_format():
     result = runner.invoke(app, ["config", "set", "format", "yaml"])
     assert result.exit_code == 7
     assert "text, markdown, or json" in result.stderr
+
+
+def test_usage_and_authentication_exit_codes_do_not_overlap(monkeypatch):
+    invalid_format = runner.invoke(app, ["search", "query", "--format", "yaml"])
+    assert invalid_format.exit_code == 2
+
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    missing_key = runner.invoke(app, ["search", "query", "--no-stream"])
+    assert missing_key.exit_code == 3
+    assert "Authentication error" in missing_key.stderr

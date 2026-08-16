@@ -51,6 +51,23 @@ def test_stream_error_event(httpx_mock):
 
 
 @pytest.mark.parametrize(
+    "event",
+    [
+        {"type": "error", "message": "standard failure", "code": "bad_request"},
+        {"type": "error", "error": {"message": "standard failure", "code": "bad_request"}},
+    ],
+)
+def test_stream_error_accepts_standard_and_nested_shapes(httpx_mock, event):
+    httpx_mock.add_response(url=f"{BASE_URL}/responses", text=sse(event))
+    with (
+        ApiClient(TEST_API_KEY) as client,
+        pytest.raises(StreamError, match="standard failure"),
+        client.stream_response(stream_request()) as events,
+    ):
+        list(events)
+
+
+@pytest.mark.parametrize(
     "event, error_type",
     [
         (
@@ -99,6 +116,29 @@ def test_stream_ending_before_completion(httpx_mock):
         client.stream_response(stream_request()) as events,
     ):
         list(events)
+
+
+def test_stream_retries_bounded_retry_after(httpx_mock):
+    waits: list[float] = []
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        status_code=429,
+        headers={"Retry-After": "0"},
+    )
+    httpx_mock.add_response(
+        url=f"{BASE_URL}/responses",
+        text=sse({"type": "response.completed", "response": MOCK_RESPONSE}),
+    )
+
+    with (
+        ApiClient(TEST_API_KEY, sleep=waits.append) as client,
+        client.stream_response(stream_request()) as events,
+    ):
+        received = list(events)
+
+    assert any(isinstance(event, CompletedEvent) for event in received)
+    assert waits == [0.0]
+    assert len(httpx_mock.get_requests()) == 2
 
 
 class BrokenStream(httpx.SyncByteStream):
