@@ -4,13 +4,13 @@
     "name": "tani-shi"
   },
   "metadata": {
-    "description": "Generate cited answers from X and the web with xAI search tools",
-    "version": "0.2.0"
+    "description": "Thin CLI for xAI X Search and Web Search answers with sources",
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "xai-cli",
-      "description": "Generate cited X and web research answers with xai-cli",
+      "description": "Research X and the web with xai-cli",
       "source": "./",
       "strict": false,
       "skills": [

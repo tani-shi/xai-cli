@@ -2,41 +2,36 @@ import pytest
 
 TEST_API_KEY = "xai-test-key-12345678"
 
-MOCK_RESPONSE = {
+RESPONSE = {
     "id": "resp_123",
-    "model": "grok-4.6",
+    "model": "grok-4.7",
     "status": "completed",
+    "citations": None,
     "output": [
+        {"type": "custom_tool_call", "name": "x_keyword_search"},
         {
             "type": "message",
             "content": [
                 {
                     "type": "output_text",
-                    "text": "A cited answer.[[1]](https://example.com/source)",
+                    "text": "An answer.",
                     "annotations": [
-                        {
-                            "type": "url_citation",
-                            "url": "https://example.com/source",
-                            "title": "1",
-                            "start_index": 15,
-                            "end_index": 47,
-                        }
+                        {"type": "url_citation", "url": "https://x.com/i/status/1"},
+                        {"type": "url_citation", "url": "https://x.com/i/status/2"},
+                        {"type": "url_citation", "url": "https://x.com/i/status/1"},
+                        {"type": "file_citation"},
                     ],
                 }
             ],
-        }
+        },
     ],
-    "citations": ["https://example.com/source"],
+    "usage": {"server_side_tool_usage_details": {"x_search_calls": 2, "x_posts_fetched": 5}},
 }
 
 
 @pytest.fixture(autouse=True)
-def _set_api_key(monkeypatch, request):
+def _isolate_credentials(monkeypatch, request):
     if request.node.get_closest_marker("live") is None:
         monkeypatch.setenv("XAI_API_KEY", TEST_API_KEY)
-
-
-@pytest.fixture(autouse=True)
-def _isolate_config(tmp_path, monkeypatch):
-    monkeypatch.setattr("xai_cli.config.CONFIG_DIR", tmp_path)
-    monkeypatch.setattr("xai_cli.config.CONFIG_FILE", tmp_path / "config.toml")
+        monkeypatch.delenv("XAI_DEFAULT_MODEL", raising=False)
+        monkeypatch.setattr("xai_cli.api._read_keychain", lambda: "")

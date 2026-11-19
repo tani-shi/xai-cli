@@ -1,7 +1,7 @@
 [project]
 name = "xai-cli"
 dynamic = ["version"]
-description = "Generate cited answers from X and the web with xAI search tools"
+description = "Thin CLI for xAI X Search and Web Search answers with sources"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -22,10 +22,6 @@ classifiers = [
 dependencies = [
     "typer>=0.15",
     "httpx>=0.28",
-    "rich>=13",
-    "pydantic>=2",
-    "platformdirs>=4",
-    "tomli-w>=1.2",
 ]
 
 [project.urls]
